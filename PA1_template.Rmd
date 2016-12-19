@@ -8,18 +8,122 @@ output:
 
 ## Loading and preprocessing the data
 
-
+The following code loads the file into a dataframe and converts the date field from a string to a date. Note that the code assumes that the source file has been downloaded and unzipped in the working directory.
+ 
+```{r}
+activityData <- read.csv("activity.csv", stringsAsFactors = FALSE)
+activityData$date <-  as.POSIXct(activityData$date)
+```
 
 ## What is mean total number of steps taken per day?
 
+The code below calculates the steps per day and produces a histogram of this data.
 
+```{r}
+stepsPerDay <- aggregate(steps ~ date, activityData, sum)
+hist(stepsPerDay$steps, main="Histogram of steps per day", xlab="Steps")
+
+```
+
+The histogram shows the distribution is roughly bell-shaped with a peak in the range of 10,000 to 15,000 steps.
+
+The code below calculates the mean and median steps per day. Note that the scipen=999 option simply provides a weight in favour of normal numeric presentation rather than scientific notation.
+
+```{r}
+meanSteps <- round(mean(stepsPerDay$steps))
+medianSteps <- round(median(stepsPerDay$steps))
+options(scipen=999)
+```
+
+The mean steps per day is `r meanSteps`. The median steps per day is `r medianSteps`.
 
 ## What is the average daily activity pattern?
 
+The code below calculates the average steps per interval and produces a time series plot of this data. 
 
+```{r}
+avgStepsPerInterval <- aggregate(steps ~ interval, activityData, mean)
+plot(avgStepsPerInterval$interval, avgStepsPerInterval$steps, type="l", 
+     xlab="Interval", ylab="Average Steps")
+```
+
+The plot shows that on average almost no activity occurs during the first 500 intervals of a day or during the last 200. There is a heavy spike in activity around the 800th interval, with moderate activity for the rest of the day.
+
+The code below calculates which interval had the highest number of average steps.
+
+```{r}
+
+maxInterval <- avgStepsPerInterval[which.max(avgStepsPerInterval$steps), ]
+
+```
+
+The highest average number of steps was `r round(maxInterval$steps)` and this was found in interval `r maxInterval$interval`.
 
 ## Imputing missing values
 
+The code below calculates the number of missing values in the original dataset.
 
+```{r}
+countMissing <- sum(is.na(activityData$steps))
+```
+
+The number of missing values in the original dataset is `r countMissing`.
+
+The code below creates a new dataset with the missing values replaced by the mean for the corresponding interval.
+
+```{r}
+newSteps <- ifelse(is.na(activityData$steps), 
+                   avgStepsPerInterval$steps[
+                     match(activityData$interval, avgStepsPerInterval$interval)
+                   ], 
+                   activityData$steps)
+impActData <- transform(activityData, steps = newSteps)
+```
+
+The code below calculates the steps per day using the new dataset and produces a histogram of this data.
+
+```{r}
+newStepsPerDay <- aggregate(steps ~ date, impActData, sum)
+hist(newStepsPerDay$steps, main="Histogram of steps per day using imputed data", 
+     xlab="Steps")
+```
+
+The new histogram has a higher peak compared to the original histogram, which is to be expected given that missing values have been replaced with a measure of central tendency (i.e. the mean by interval).
+
+The code below is used to calculate the new mean and median steps per day.
+
+```{r}
+impMeanSteps <- round(mean(newStepsPerDay$steps))
+impMedianSteps <- round(median(newStepsPerDay$steps))
+```
+
+The mean steps per day is `r impMeanSteps`. The median steps per day is `r impMedianSteps`.
+
+In comparison to the non-imputed data, the mean has changed by `r impMeanSteps-meanSteps` and the median has changed by `r impMedianSteps-medianSteps`. As such, replacing missing values has not really changed the measures of central tendency. However, it would have changed measures of average dispersion such as the standard deviation.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+The code below creates a new column in the imputed dataset to identify whether the record relates to a weekday or a weekend.
+
+```{r}
+impActData$dayType  <- ifelse(weekdays(impActData$date) %in% 
+                                  c("Saturday", "Sunday"),
+                              "weekend", 
+                              "weekday")
+impActData$dayType  <- as.factor(impActData$dayType)
+```
+
+The below code calculates the number of average steps for each combination of day type and interval. This summary is then plotted.
+
+```{r warning=FALSE}
+stepsPerDayType <- aggregate(steps ~ dayType + interval, impActData, mean)
+library(lattice)
+with(stepsPerDayType, 
+     xyplot(steps ~ interval | dayType, 
+            type = "l",      
+            main = "Average Steps by Day Type and Interval",
+            xlab = "Intervals",
+            ylab = "Average Steps"))
+```
+
+The plot shows that there is a spike in activity at around the 800th interval on weekdays whilst there is a more even spread of activity on the weekend. 
